@@ -7,7 +7,7 @@ description: Show a UI change with real screenshots from the local app. Seeds a 
 
 Capture real, full-page screenshots of the running app, before and after a change. Everything this skill makes (seed, harness, PNGs, report) stays in `.context/visual-proof/` and is never committed. Check that the directory is ignored (`git check-ignore .context`); if not, add `/.context/` to `.git/info/exclude`.
 
-Scripts live in `<skill-dir>/scripts/` (below: `$VP`), where `<skill-dir>` is the directory that contains this `SKILL.md`. The install path differs per tool and config directory, so set `$VP` to the absolute path. Run the scripts from the repository root.
+Scripts live in `<skill-dir>/scripts/` (below: `$VP`), where `<skill-dir>` is the directory that contains this `SKILL.md`. The install path differs per tool and config directory, so set `$VP` to the absolute path and keep `"$VP/..."` quoted: the path can contain spaces. Run the scripts from the repository root.
 
 This skill is a procedure, not a project setup. The seed, the dev-server command, and the login cookie are different in each repository. If the repository has `.context/visual-proof/project.md` or a section for this skill in `AGENTS.md` / `CLAUDE.md`, use those values. If not, find them in the README and the code, and write them to `.context/visual-proof/project.md` for the next run.
 
@@ -22,8 +22,8 @@ This skill is a procedure, not a project setup. The seed, the dev-server command
 ## 1. Check the ground
 
 ```bash
-VP=<skill-dir>/scripts                              # absolute path of this skill's scripts directory
-node $VP/local-db-url.cjs <env files> >/dev/null   # for example: apps/web/.env apps/web/.env.local; refuses a non-local DATABASE_URL
+VP="<skill-dir>/scripts"                            # quoted absolute path of this skill's scripts directory
+node "$VP/local-db-url.cjs" <env files> >/dev/null   # for example: apps/web/.env apps/web/.env.local; refuses a non-local DATABASE_URL
 pg_isready -h localhost -p 5432                    # if down: start it and check again
 ```
 
@@ -34,7 +34,7 @@ Also check that dependencies and generated outputs (database client, built packa
 Create a user, the account or tenant it owns, and a session row with a known token, as plain SQL in `.context/visual-proof/seed.sql`. Make it re-runnable (delete, then insert) and prefix every id with `vp_`.
 
 ```bash
-psql "$(node $VP/local-db-url.cjs <env files>)" -q -f .context/visual-proof/seed.sql
+psql "$(node "$VP/local-db-url.cjs" <env files>)" -q -f .context/visual-proof/seed.sql
 ```
 
 - Use the same `DATABASE_URL` as the dev server. A mismatch is the usual cause of a logged-out page.
@@ -115,7 +115,7 @@ Write `.context/visual-proof/manifest.json`:
 ```
 
 ```bash
-node $VP/build-report.mjs .context/visual-proof/manifest.json     # writes .context/visual-proof/report.html
+node "$VP/build-report.mjs" .context/visual-proof/manifest.json     # writes .context/visual-proof/report.html
 ```
 
 The report is one file with the images inlined, so it opens anywhere. Tell the user its absolute path and show the key images in the chat.
