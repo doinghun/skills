@@ -2,12 +2,7 @@
 
 Use this file when the coordinator runs on the user's Mac (`CONDUCTOR_IS_LOCAL=1`). Local workspaces are git worktrees on that Mac. The `conductor` CLI manages cloud workspaces only, so it cannot create or drive local sessions. Conductor's MCP server (`conductor`) does that with its control tools.
 
-The roles, the brief, the six stages in "Run the crew", the screenshot procedure, and the PR rules in `SKILL.md` stay the same. This file replaces these parts of `SKILL.md`:
-
-- "Automatic setup readiness"
-- "Session commands and handoffs"
-- "Monitor, retry, and resume"
-- In "Workspace and context": the `conductor workspace list` / `conductor sql` paragraph. For every path, use the repository root of the target worktree.
+The roles, the brief, the six stages in "Run the crew", the screenshot procedure, and the PR rules in `SKILL.md` apply. This file gives the commands for them. For every path, use the repository root of the target worktree. `<skill-dir>` is the directory that contains `SKILL.md`.
 
 ## Preflight
 
@@ -28,7 +23,6 @@ The roles, the brief, the six stages in "Run the crew", the screenshot procedure
 | Read replies                | `conductor session message --after`          | `ListSessionMessages` with `filter.afterIndex`                     |
 | Stop a role                 | `conductor session cancel`                   | `CancelSessions`                                                   |
 | New isolated workspace      | `conductor workspace create` + status poll   | `CreateWorkspace`, then `WaitForSessions` / `GetWorkspaces`        |
-| Other repositories          | `conductor project list`                     | `ListRepositories`                                                 |
 | Links for the user          | deep link                                    | `appUrl` on every workspace and session                            |
 
 ## Resolve models
@@ -36,7 +30,7 @@ The roles, the brief, the six stages in "Run the crew", the screenshot procedure
 Call `ListModels` with `{ "limit": 200 }`. If `nextCursor` is not null, read the next pages and join the `items`. Write the result to `.context/crew/models.json` as `{ "items": [...] }` without changes, then run:
 
 ```bash
-node ~/.claude/skills/conductor-crew/scripts/resolve-models.mjs < .context/crew/models.json
+node <skill-dir>/scripts/resolve-models.mjs < .context/crew/models.json
 ```
 
 The script accepts this shape and checks the effort against the picked model's own `effortLevels`. Save its output in `state.json`. A non-zero exit is a blocker to report, not a reason to pick another model. Agents are `claude`, `codex`, `cursor`, or `muse`; ACP agents cannot be started with these tools.
@@ -83,14 +77,14 @@ Follow-ups to the same role (review findings to the implementer, the new diff to
 - **Retry with the same IDs.** `CreateSession`, `SendSessionMessage`, and `CreateWorkspace` are idempotent on their IDs: a retry returns what the first call made. After a timeout or an unclear result, repeat the call with the saved IDs and the same prompt. Never generate new IDs because a response was lost.
 - **Resume.** Read `state.json`, then call `GetSessions` with the saved role session IDs. Continue with those sessions when the task, branch, and handoffs still match. Do not replay completed stages. If another task uses `.context/crew/`, use a separate directory and change all prompt paths.
 - **Resource limits.** On `insufficient_resources` for disk or memory, stop creating work and tell the user. For `concurrent_setups`, wait `retryAfterSeconds`, then retry with the same IDs.
-- **Cancel.** `CancelSessions` and `ArchiveSessions` ask the user for approval. Cancel only sessions whose `createdBySessionId` is your own session ID from `WhoAmI`. After a cancel, confirm with `GetSessions` that the role is not `running` before another role writes source files. Do not archive role sessions unless the user asks; they are the record of the run.
+- **Cancel.** `CancelSessions` can stop any session in the repository, including ones the user started. Cancel only sessions whose `createdBySessionId` is your own session ID from `WhoAmI`. After a cancel, confirm with `GetSessions` that the role is not `running` before another role writes source files. Do not archive role sessions unless the user asks; they are the record of the run.
 - **Other sessions.** The tools can read and change every local session on the Mac. Do not message, cancel, or archive sessions this run did not start. Do not read old transcripts with `ListSessions` / `ListSessionMessages` to recover context: they can contain pasted credentials or raw logs. Work from the repository and the current brief.
 
 ## New local workspace
 
 Use your own workspace unless the user asks for a new one or the work needs its own worktree and branch.
 
-- Generate and save `workspaceId`, `sessionId`, and `messageId`, then call `CreateWorkspace` with `{ workspaceId, name, baseBranch?, repositoryId?, firstSession: { sessionId, messageId, agent, model, effort, title, message } }`. `repositoryId` defaults to your repository; get others from `ListRepositories`.
+- Generate and save `workspaceId`, `sessionId`, and `messageId`, then call `CreateWorkspace` with `{ workspaceId, name, baseBranch?, repositoryId?, firstSession: { sessionId, messageId, agent, model, effort, title, message } }`. `repositoryId` defaults to your repository.
 - `firstSession.message` is required and the new worktree has no `.context/crew/` yet. Put the complete planning prompt inline in that message, including the brief and the readiness checks below. The first session is the planner.
 - The call returns while the workspace is `initializing`. Conductor creates the worktree, runs the setup script, and sends the message when the workspace is ready. There is no manual readiness poll: wait with `WaitForSessions`.
 - If `GetWorkspaces` shows `failed` (read `failureReason`) or lists the ID in `missingIds`, creation failed. Report the reason, then create again with a new `workspaceId` only if the cause is fixed.

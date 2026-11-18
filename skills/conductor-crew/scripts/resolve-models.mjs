@@ -1,10 +1,15 @@
 #!/usr/bin/env node
 // Resolve each crew role to the newest model ID in its family, plus its effort level.
-// Usage (cloud CLI):  conductor model --json | node resolve-models.mjs
-// Usage (local MCP):  node resolve-models.mjs < .context/crew/models.json
+// Run from this skill's directory (the install path differs per tool and config dir):
+// Usage (cloud CLI):  conductor model --json | node scripts/resolve-models.mjs
+// Usage (local MCP):  node scripts/resolve-models.mjs < <worktree>/.context/crew/models.json
 //   where models.json is the saved result of the Conductor `ListModels` tool ({"items":[...]}).
 // Prints {"planner":{"agent":"claude","model":"fable-5-1","effort":"xhigh"},...};
-// exits 1 if a role has no model, its agent has no credentials, or the effort is not supported.
+// exits 1 if a role has no model or the effort is not supported.
+// Warns on stderr about GPT tiers it does not know: they are skipped, so a new tier needs GPT_TIERS.
+
+import { realpathSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
 const GPT_TIERS = ['luna', 'terra', 'sol', 'astra'];
 
@@ -57,19 +62,18 @@ function compare(a, b) {
   return 0;
 }
 
-// Both catalog shapes become { <agent>: { configured, models: [{ id, efforts }] } }.
-// Cloud (`conductor model --json`): { agents: [{ agent, models: [id], efforts, configured? }] }.
+// Both catalog shapes become { <agent>: { models: [{ id, efforts }] } }.
+// Cloud (`conductor model --json`): { agents: [{ agent, models: [id], efforts }] }, efforts per agent.
 // Local (`ListModels` tool): { items: [{ agent, id, effortLevels }] }, efforts per model.
 function normalize(catalog) {
   const agents = {};
   for (const a of catalog.agents ?? []) {
     agents[a.agent] = {
-      configured: a.configured !== false,
       models: (a.models ?? []).map((id) => ({ id, efforts: a.efforts ?? [] })),
     };
   }
   for (const m of catalog.items ?? []) {
-    agents[m.agent] ??= { configured: true, models: [] };
+    agents[m.agent] ??= { models: [] };
     agents[m.agent].models.push({ id: m.id, efforts: m.effortLevels ?? [] });
   }
   return agents;
@@ -86,18 +90,42 @@ export function resolveModels(catalog) {
       .filter((m) => m.key)
       .sort((a, b) => compare(b.key, a.key));
     if (ranked.length === 0) missing.push(`${role} (${agent} model)`);
-    else if (!entry.configured) missing.push(`${role} (${agent} not configured)`);
     else if (!ranked[0].efforts.includes(effort))
       missing.push(`${role} (${agent} effort ${effort})`);
     else result[role] = { agent, model: ranked[0].id, effort };
   }
-  return { result, missing };
+  return { result, missing, warnings: unknownGptTiers(agents) };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// gpt-7-nova is skipped by parseGpt. Say so, or a new tier silently loses to an older version.
+function unknownGptTiers(agents) {
+  const warnings = [];
+  for (const { models } of Object.values(agents)) {
+    for (const { id } of models) {
+      const m = id.match(/^gpt-\d+(?:\.\d+)?-([a-z]+)$/);
+      if (m && m[1] !== 'codex' && !GPT_TIERS.includes(m[1]))
+        warnings.push(`${id}: unknown GPT tier "${m[1]}", skipped (add it to GPT_TIERS)`);
+    }
+  }
+  return warnings;
+}
+
+// Compare real paths: Node resolves symlinks for import.meta.url but not for argv[1],
+// and `npx skills add` installs skills as symlinks.
+function isMain() {
+  if (!process.argv[1]) return false;
+  try {
+    return import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href;
+  } catch {
+    return false;
+  }
+}
+
+if (isMain()) {
   let input = '';
   for await (const chunk of process.stdin) input += chunk;
-  const { result, missing } = resolveModels(JSON.parse(input));
+  const { result, missing, warnings } = resolveModels(JSON.parse(input));
+  for (const w of warnings) console.error(`Warning: ${w}`);
   if (missing.length) {
     console.error(`Cannot resolve: ${missing.join(', ')}`);
     process.exit(1);

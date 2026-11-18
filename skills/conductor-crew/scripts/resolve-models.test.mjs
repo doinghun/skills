@@ -1,7 +1,14 @@
-// Run: node --test ~/.claude/skills/conductor-crew/scripts/resolve-models.test.mjs
+// Run from this skill's directory: node --test scripts/resolve-models.test.mjs
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { copyFileSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { resolveModels } from './resolve-models.mjs';
+
+const SCRIPT = fileURLToPath(new URL('./resolve-models.mjs', import.meta.url));
 
 const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 
@@ -145,11 +152,37 @@ test('local shape checks the effort of the picked model, not of the agent', () =
   assert.equal(result.planner, undefined);
 });
 
-test('reports an agent without connected credentials', () => {
-  const c = catalog({
-    claude: ['fable-5', 'opus-5', 'sonnet-5'],
-    codex: ['gpt-6-astra'],
-  });
-  c.agents[1].configured = false;
-  assert.deepEqual(resolveModels(c).missing, ['reviewer (codex not configured)']);
+test('warns about a GPT tier it does not know', () => {
+  const { warnings } = resolveModels(
+    catalog({
+      claude: ['fable-5', 'opus-5', 'sonnet-5'],
+      codex: ['gpt-6-astra', 'gpt-7-nova', 'gpt-7.1-codex', 'gpt-5.5'],
+    })
+  );
+  assert.deepEqual(warnings, [
+    'gpt-7-nova: unknown GPT tier "nova", skipped (add it to GPT_TIERS)',
+  ]);
+});
+
+// The CLI must fail loudly from any install path. An empty catalog resolves nothing,
+// so a working CLI exits 1; a broken main guard prints nothing and exits 0.
+function runCli(path) {
+  return spawnSync(process.execPath, [path], { input: '{"items":[]}', encoding: 'utf8' });
+}
+
+test('CLI runs through a symlinked install and a path with a space', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'crew resolve '));
+  try {
+    const copy = join(dir, 'resolve-models.mjs');
+    copyFileSync(SCRIPT, copy);
+    const link = join(dir, 'linked.mjs');
+    symlinkSync(SCRIPT, link);
+    for (const path of [SCRIPT, copy, link]) {
+      const run = runCli(path);
+      assert.equal(run.status, 1, path);
+      assert.match(run.stderr, /Cannot resolve: planner/, path);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
