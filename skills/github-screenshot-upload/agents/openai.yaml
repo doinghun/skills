@@ -1,0 +1,3 @@
+interface:
+  display_name: "GitHub Screenshot Upload"
+  short_description: "Upload screenshots as GitHub user attachments"
