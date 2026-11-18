@@ -18,4 +18,4 @@ npx skills add doinghun/skills --skill pr-babysit   # one skill
 
 Or copy a folder from `skills/` into `~/.claude/skills/` (Claude Code) or `~/.codex/skills/` (Codex).
 
-The skills call their scripts at `~/.claude/skills/<skill>/scripts`. If you install them in a different location, change that path in the `SKILL.md`.
+Each skill finds its scripts relative to its own directory, so any install location works.

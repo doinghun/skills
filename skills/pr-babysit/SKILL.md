@@ -7,7 +7,7 @@ description: Own a PR from local change to a clean review without the user in th
 
 Run the loop to an exit without asking the user. The user wants to come back to a clean PR.
 
-`PB=$HOME/.claude/skills/pr-babysit/scripts`. Run from the repo root.
+`PB=<skill-dir>/scripts`, where `<skill-dir>` is the directory that contains this `SKILL.md` (the install path differs per tool and config directory; use the absolute path). Run from the repo root.
 
 If the user only pastes a `#discussion_r<id>` link and asks "valid?", answer and wait. The number is the comment `databaseId`.
 

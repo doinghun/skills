@@ -7,7 +7,7 @@ description: Show a UI change with real screenshots from the local app. Seeds a 
 
 Capture real, full-page screenshots of the running app, before and after a change. Everything this skill makes (seed, harness, PNGs, report) stays in `.context/visual-proof/` and is never committed. Check that the directory is ignored (`git check-ignore .context`); if not, add `/.context/` to `.git/info/exclude`.
 
-Scripts live in `~/.claude/skills/visual-proof/scripts/` (below: `$VP`). Run them from the repository root.
+Scripts live in `<skill-dir>/scripts/` (below: `$VP`), where `<skill-dir>` is the directory that contains this `SKILL.md`. The install path differs per tool and config directory, so set `$VP` to the absolute path. Run the scripts from the repository root.
 
 This skill is a procedure, not a project setup. The seed, the dev-server command, and the login cookie are different in each repository. If the repository has `.context/visual-proof/project.md` or a section for this skill in `AGENTS.md` / `CLAUDE.md`, use those values. If not, find them in the README and the code, and write them to `.context/visual-proof/project.md` for the next run.
 
@@ -22,7 +22,7 @@ This skill is a procedure, not a project setup. The seed, the dev-server command
 ## 1. Check the ground
 
 ```bash
-VP=$HOME/.claude/skills/visual-proof/scripts
+VP=<skill-dir>/scripts                              # absolute path of this skill's scripts directory
 node $VP/local-db-url.cjs <env files> >/dev/null   # for example: apps/web/.env apps/web/.env.local; refuses a non-local DATABASE_URL
 pg_isready -h localhost -p 5432                    # if down: start it and check again
 ```
