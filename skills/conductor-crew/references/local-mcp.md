@@ -33,7 +33,7 @@ Call `ListModels` with `{ "limit": 200 }`. If `nextCursor` is not null, read the
 node <skill-dir>/scripts/resolve-models.mjs < .context/crew/models.json
 ```
 
-The script accepts this shape and checks the effort against the picked model's own `effortLevels`. Save its output in `state.json`. A non-zero exit is a blocker to report, not a reason to pick another model. Agents are `claude`, `codex`, `cursor`, or `muse`; ACP agents cannot be started with these tools.
+The script accepts this shape and checks the effort against the picked model's own `effortLevels`. Save its output in `state.json`. A non-zero exit is a blocker to report, not a reason to pick another model. An unresolved optional screenshots role is a warning only (see `SKILL.md`). Agents are `claude`, `codex`, `cursor`, or `muse`; ACP agents cannot be started with these tools.
 
 ## Start a role session
 

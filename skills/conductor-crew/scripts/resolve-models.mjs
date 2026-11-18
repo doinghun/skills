@@ -5,7 +5,9 @@
 // Usage (local MCP):  node scripts/resolve-models.mjs < <worktree>/.context/crew/models.json
 //   where models.json is the saved result of the Conductor `ListModels` tool ({"items":[...]}).
 // Prints {"planner":{"agent":"claude","model":"fable-5-1","effort":"xhigh"},...};
-// exits 1 if a role has no model or the effort is not supported.
+// exits 1 if a required role has no model or the effort is not supported.
+// The screenshots role is optional: when it is unresolved, it is left out of the output with a
+// stderr warning, so a "no visible change" run is not blocked. A capture plan then needs it.
 // Warns on stderr about GPT tiers it does not know: they are skipped, so a new tier needs GPT_TIERS.
 
 import { realpathSync } from 'node:fs';
@@ -29,9 +31,11 @@ const ROLES = {
   // Newest GPT, top tier (astra > sol > terra > luna) within that version.
   reviewer: { agent: 'codex', effort: 'xhigh', match: parseGpt },
   // Newest Sonnet: fastest role with correct captures in the Sep 2026 benchmark.
+  // Optional: only a plan with a capture plan starts this role.
   screenshots: {
     agent: 'claude',
     effort: 'low',
+    optional: true,
     match: (id) => parseClaude(id, 'sonnet'),
   },
 };
@@ -83,18 +87,20 @@ export function resolveModels(catalog) {
   const agents = normalize(catalog);
   const result = {};
   const missing = [];
-  for (const [role, { agent, effort, match }] of Object.entries(ROLES)) {
+  const optionalMissing = [];
+  for (const [role, { agent, effort, optional, match }] of Object.entries(ROLES)) {
+    const unresolved = optional ? optionalMissing : missing;
     const entry = agents[agent];
     const ranked = (entry?.models ?? [])
       .map((m) => ({ ...m, key: match(m.id) }))
       .filter((m) => m.key)
       .sort((a, b) => compare(b.key, a.key));
-    if (ranked.length === 0) missing.push(`${role} (${agent} model)`);
+    if (ranked.length === 0) unresolved.push(`${role} (${agent} model)`);
     else if (!ranked[0].efforts.includes(effort))
-      missing.push(`${role} (${agent} effort ${effort})`);
+      unresolved.push(`${role} (${agent} effort ${effort})`);
     else result[role] = { agent, model: ranked[0].id, effort };
   }
-  return { result, missing, warnings: unknownGptTiers(agents) };
+  return { result, missing, optionalMissing, warnings: unknownGptTiers(agents) };
 }
 
 // gpt-7-nova is skipped by parseGpt. Say so, or a new tier silently loses to an older version.
@@ -124,8 +130,10 @@ function isMain() {
 if (isMain()) {
   let input = '';
   for await (const chunk of process.stdin) input += chunk;
-  const { result, missing, warnings } = resolveModels(JSON.parse(input));
+  const { result, missing, optionalMissing, warnings } = resolveModels(JSON.parse(input));
   for (const w of warnings) console.error(`Warning: ${w}`);
+  for (const o of optionalMissing)
+    console.error(`Warning: Optional role unresolved: ${o}; a capture plan cannot run without it`);
   if (missing.length) {
     console.error(`Cannot resolve: ${missing.join(', ')}`);
     process.exit(1);

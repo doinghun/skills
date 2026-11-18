@@ -106,6 +106,25 @@ test('reports a role it cannot resolve instead of substituting another model', (
   assert.deepEqual(noXhigh.missing, ['reviewer (codex effort xhigh)']);
 });
 
+test('an unresolved screenshots role does not block the run', () => {
+  // A backend task with "no visible change" never starts the screenshot session.
+  const noSonnet = resolveModels(
+    catalog({ claude: ['fable-5', 'opus-5'], codex: ['gpt-6-astra'] })
+  );
+  assert.deepEqual(noSonnet.missing, []);
+  assert.deepEqual(noSonnet.optionalMissing, ['screenshots (claude model)']);
+  assert.equal(noSonnet.result.screenshots, undefined);
+  assert.equal(noSonnet.result.planner.model, 'fable-5');
+
+  const run = spawnSync(process.execPath, [SCRIPT], {
+    input: JSON.stringify(catalog({ claude: ['fable-5', 'opus-5'], codex: ['gpt-6-astra'] })),
+    encoding: 'utf8',
+  });
+  assert.equal(run.status, 0);
+  assert.match(run.stderr, /Optional role unresolved: screenshots/);
+  assert.equal(JSON.parse(run.stdout).screenshots, undefined);
+});
+
 // The local Conductor MCP `ListModels` tool returns one item per model, each with its own effort levels.
 const localItem = (agent, id, effortLevels = EFFORTS) => ({
   agent,
